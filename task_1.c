@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/resource.h>
-#include <ulimit.h>
+#include <sys/prctl.h>
 
 extern char **environ;
 
@@ -53,9 +53,13 @@ int main(int argc, char *argv[])
             printf("pgrp  %d\n", getpgrp());
 
         } else if (operations[i].option == 'u') { 
-            struct rlimit limit;
-            getrlimit(RLIMIT_NPROC, &limit);
-            printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
+            int limit_new;
+            prctl(PR_GETPROCESSLIMIT, &limit_new);
+            printf("Process limit: %d\n", limit_new);
+            
+            // struct rlimit limit;
+            // getrlimit(RLIMIT_NPROC, &limit);
+            // printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
 
         } else if (operations[i].option == 'U') {
 
