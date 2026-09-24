@@ -7,6 +7,9 @@ int main(void)
     time_t t;
     struct tm *tm;
 
+    char *time_zone_str = getenv("TZ");
+    printf("actual time zone %s \n", time_zone_str);
+
     time(&t);
     tm = localtime(&t);
     printf("befor %s \n", asctime(tm));
