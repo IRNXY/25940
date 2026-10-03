@@ -8,8 +8,8 @@ int main(void)
     FILE *file;
 
     printf("First try:\n");
-    printf("Real UID:      %d\n", getuid());
-    printf("Effective UID: %d\n", geteuid());
+    printf("real: %d\n", getuid());
+    printf("effect UID: %d\n", geteuid());
 
     file = fopen("zh.txt", "r");
 
@@ -23,8 +23,8 @@ int main(void)
     setuid(getuid());
 
     printf("\nSecond try:\n");
-    printf("Real UID:      %d\n", getuid());
-    printf("Effective UID: %d\n", geteuid());
+    printf("real: %d\n", getuid());
+    printf("effect : %d\n", geteuid());
 
     file = fopen("zh.txt", "r");
 
