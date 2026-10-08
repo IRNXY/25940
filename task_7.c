@@ -67,9 +67,8 @@ int main(int argc, char *argv[])
     }
 
     signal(SIGALRM, finish);
-
+    alarm(5);
     while (1) {
-        alarm(5);
 
         int line_number;
 
