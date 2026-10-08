@@ -69,8 +69,8 @@ int main(int argc, char *argv[])
     }
 
     signal(SIGALRM, timeout_handler);
+    alarm(5);
     while (1) {
-        alarm(5);
         int line_number;
         printf("\ninput: ");
         scanf("%d", &line_number);
