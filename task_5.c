@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    int end = lseek(fd, 0L, 1);
+    int end = lseek(fd, 0, 1);
     table[line_count].len = end - line_start;
     line_count += 1;
     
