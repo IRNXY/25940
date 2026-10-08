@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
         buffer[bytes_read] = '\0';
 
         printf("%s", buffer);
+        alarm(0);
     }
 
     close(file_r);
