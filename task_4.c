@@ -24,19 +24,8 @@ int main()
         len--;
 
         struct node *new_node = malloc(sizeof(struct node));
-
-        if (new_node == NULL) {
-            perror("malloc node");
-            return 1;
-        }
-
+        
         new_node->str = malloc(len + 1);
-
-        if (new_node->str == NULL) {
-            perror("malloc str");
-            free(new_node);
-            return 1;
-        }
 
         strcpy(new_node->str, buffer);
 
