@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
         } else if (operations[i].option == 'u') { 
             // long limit_new;
             // limit_new = ulimit(UL_GETMAXPROCS);
-            system("ulimit -a"); //Вызов для печати
+            system("ulimit"); //Вызов для печати
             printf("ulimit - %ld\n", ulimit(UL_GETFSIZE));
             
             // struct rlimit limit;
