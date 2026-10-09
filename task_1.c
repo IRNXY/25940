@@ -112,11 +112,18 @@ int main(int argc, char *argv[])
             rctlblk_set_value(blk, limit);
             rctlblk_set_privilege(blk, RCPRIV_BASIC);
 
-            setrctl("process.max-processes", NULL, blk, RCTL_INSERT);
+            
+            if (setrctl("process.max-processes", NULL, blk, RCTL_REPLACE) == -1) {
+                if (setrctl("process.max-processes", NULL, blk, RCTL_INSERT) == -1) {
+                    perror("setrctl");
+                    free(blk);
+                    return 1;
+                }
+            }
 
             printf("Лимит процессов установлен: %llu\n", (unsigned long long)limit);
 
-            free(blk);
+            system("ulimit -u");
 
         } else if (operations[i].option == 'c') {
 
