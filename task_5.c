@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        int len = table[line_number - 1].len;
+        len = table[line_number - 1].len;
 
         char *buffer = malloc(len + 1);
 
