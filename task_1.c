@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
                         NULL, blk, RCTL_INSERT) == -1) {
                 perror("setrctl");
             }
-
+            system("ulimit -u");
             free(blk);
 
         } else if (operations[i].option == 'c') {
