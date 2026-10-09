@@ -176,12 +176,11 @@ int main(int argc, char *argv[])
     }
 
     signal(SIGALRM, finish);
-
+    alarm(5);
     while (1) {
         char input[100];
         int line_number;
 
-        alarm(5);
 
         printf("\ninput: ");
         fflush(stdout);
@@ -268,9 +267,9 @@ int main(int argc, char *argv[])
         printf("%s", buffer);
 
         free(buffer);
+        alarm(0);
     }
 
-    alarm(0);
     close(file_r);
 
     return 0;
