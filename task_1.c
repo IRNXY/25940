@@ -39,10 +39,9 @@ int print_ulimit_u_solaris(void)
 int main(int argc, char *argv[])
 {
     int opt;
-    long max_procs, need;
+    long max_procs = sysconf(_SC_CHILD_MAX);, need;
     struct Operation operations[argc];
     int count = 0;
-
     while ((opt = getopt(argc, argv, "ispuU:cC:dvV:")) != -1) {
 
         if (opt == '?') {
@@ -61,6 +60,7 @@ int main(int argc, char *argv[])
     }
     
     for (int i = count - 1; i >= 0; i--) {
+        max_procs = sysconf(_SC_CHILD_MAX);
         if (operations[i].option){
             max_procs = need;
         }
@@ -85,7 +85,6 @@ int main(int argc, char *argv[])
 
 
             errno = 0;
-            max_procs = sysconf(_SC_CHILD_MAX);
 
             if (max_procs == -1) {
                 if (errno != 0) {
