@@ -108,12 +108,19 @@ int main(int argc, char *argv[])
             uint64_t limit;
             limit = strtoull(optarg, NULL, 10);
             blk = calloc(1, rctlblk_size());
-
             rctlblk_set_value(blk, limit);
             rctlblk_set_privilege(blk, RCPRIV_BASIC);
 
-            
-            if (setrctl("process.max-processes", NULL, blk, RCTL_REPLACE) == -1) {
+            /* Сначала пробуем вставить — если значения ещё нет */
+            if (setrctl("process.max-processes", NULL, blk, RCTL_INSERT) == -1) {
+                /* Значение уже существует — удаляем и вставляем новое */
+                rctlblk_t *old = calloc(1, rctlblk_size());
+
+                if (getrctl("process.max-processes", NULL, old, RCTL_FIRST) == 0) {
+                    setrctl("process.max-processes", NULL, old, RCTL_DELETE);
+                }
+                free(old);
+
                 if (setrctl("process.max-processes", NULL, blk, RCTL_INSERT) == -1) {
                     perror("setrctl");
                     free(blk);
@@ -122,8 +129,8 @@ int main(int argc, char *argv[])
             }
 
             printf("Лимит процессов установлен: %llu\n", (unsigned long long)limit);
-
             system("ulimit -u");
+
 
         } else if (operations[i].option == 'c') {
 
