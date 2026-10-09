@@ -39,6 +39,7 @@ int print_ulimit_u_solaris(void)
 int main(int argc, char *argv[])
 {
     int opt;
+    long max_procs, need;
     struct Operation operations[argc];
     int count = 0;
 
@@ -60,6 +61,10 @@ int main(int argc, char *argv[])
     }
     
     for (int i = count - 1; i >= 0; i--) {
+        if (operations[i].option){
+            max_procs = need;
+        }
+        
         if (operations[i].option == 'i') {
 
             printf("uid   %d\n", getuid());
@@ -78,38 +83,20 @@ int main(int argc, char *argv[])
 
         } else if (operations[i].option == 'u') { 
 
-            // long max_procs;
 
-            // errno = 0;
-            // max_procs = sysconf(_SC_CHILD_MAX);
+            errno = 0;
+            max_procs = sysconf(_SC_CHILD_MAX);
 
-            // if (max_procs == -1) {
-            //     if (errno != 0) {
-            //         perror("sysconf(_SC_CHILD_MAX)");
-            //         return -1;
-            //     }
-            //     printf("ulimit -u: unlimited\n");
-            // } else {
-            //     printf("ulimit -u: %ld\n", max_procs);
-            // }
-            rctlblk_t *blk = malloc(rctlblk_size());
-
-            if (blk == NULL) {
-                perror("malloc");
-                return 1;
+            if (max_procs == -1) {
+                if (errno != 0) {
+                    perror("sysconf(_SC_CHILD_MAX)");
+                    return -1;
+                }
+                printf("ulimit -u: unlimited\n");
+            } else {
+                printf("ulimit -u: %ld\n", max_procs);
             }
 
-            if (getrctl("task.max-processes",
-                        NULL, blk, RCTL_FIRST) == -1) {
-                perror("getrctl");
-                free(blk);
-                return 1;
-            }
-
-            printf("ulimit -u: %llu\n",
-                (unsigned long long)rctlblk_get_value(blk));
-
-            free(blk);
         } else if (operations[i].option == 'U') {
             // long new_limit = atol(optarg);
             // ulimit(UL_SETFSIZE, new_limit);
@@ -119,9 +106,8 @@ int main(int argc, char *argv[])
 
             // limit.rlim_cur = value;
             // setrlimit(RLIMIT_NPROC, &limit);
-            unsigned long long value =
-                strtoull(operations[i].arg, NULL, 10);
-
+            unsigned long long value = strtoull(operations[i].arg, NULL, 10);
+            need = atol(optarg);
             size_t size = rctlblk_size();
             rctlblk_t *blk = malloc(size);
 
@@ -134,19 +120,8 @@ int main(int argc, char *argv[])
             rctlblk_set_value(blk, value);
             rctlblk_set_local_action(blk, RCTL_LOCAL_DENY, 0);
 
-            if (setrctl("task.max-processes",
-                        NULL, blk, RCTL_INSERT) == -1) {
-                perror("setrctl");
-            }
-            free(blk);
 
-            char cmd[128];
 
-            snprintf(cmd, sizeof(cmd),
-                    "prctl -n task.max-processes %ld",
-                    (long)getpid());
-
-            system(cmd);
 
         } else if (operations[i].option == 'c') {
 
