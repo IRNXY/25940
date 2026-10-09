@@ -5,7 +5,7 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <ulimit.h>
-
+#include <errno.h>
 
 extern char **environ;
 
@@ -13,6 +13,26 @@ struct Operation {
     char option;
     char *arg;
 };
+
+int print_ulimit_u_solaris(void)
+{
+    long max_procs;
+
+    errno = 0;
+    max_procs = sysconf(_SC_CHILD_MAX);
+
+    if (max_procs == -1) {
+        if (errno != 0) {
+            perror("sysconf(_SC_CHILD_MAX)");
+            return -1;
+        }
+        printf("ulimit -u: unlimited\n");
+    } else {
+        printf("ulimit -u: %ld\n", max_procs);
+    }
+
+    return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -55,24 +75,34 @@ int main(int argc, char *argv[])
             printf("pgrp  %d\n", getpgrp());
 
         } else if (operations[i].option == 'u') { 
-            // long limit_new;
-            // limit_new = ulimit(UL_GETMAXPROCS);
-            system("ulimit"); //Вызов для печати
-            printf("ulimit - %ld\n", ulimit(UL_GETFSIZE));
-            
-            // struct rlimit limit;
-            // getrlimit(RLIMIT_NPROC, &limit);
-            // printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
+
+            // long max_procs;
+
+            // errno = 0;
+            // max_procs = sysconf(_SC_CHILD_MAX);
+
+            // if (max_procs == -1) {
+            //     if (errno != 0) {
+            //         perror("sysconf(_SC_CHILD_MAX)");
+            //         return -1;
+            //     }
+            //     printf("ulimit -u: unlimited\n");
+            // } else {
+            //     printf("ulimit -u: %ld\n", max_procs);
+            // }
+            struct rlimit limit;
+            getrlimit(RLIMIT_NPROC, &limit);
+            printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
 
         } else if (operations[i].option == 'U') {
-            long new_limit = atol(optarg);
-            ulimit(UL_SETFSIZE, new_limit);
-            // struct rlimit limit;
-            // long value = strtol(operations[i].arg, NULL, 10);
-            // getrlimit(RLIMIT_NPROC, &limit);
+            // long new_limit = atol(optarg);
+            // ulimit(UL_SETFSIZE, new_limit);
+            struct rlimit limit;
+            long value = strtol(operations[i].arg, NULL, 10);
+            getrlimit(RLIMIT_NPROC, &limit);
 
-            // limit.rlim_cur = value;
-            // setrlimit(RLIMIT_NPROC, &limit);
+            limit.rlim_cur = value;
+            setrlimit(RLIMIT_NPROC, &limit);
 
         } else if (operations[i].option == 'c') {
 
