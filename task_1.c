@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <rctl.h>
 #include <string.h>
+#include <ctype.h>
+#include <limits.h>
 
 extern char **environ;
 
@@ -15,6 +17,162 @@ struct Operation {
     char option;
     char *arg;
 };
+
+void print_safe(const char *str)
+{
+    const unsigned char *p =
+        (const unsigned char *)str;
+
+    while (*p) {
+        if (*p >= 32 && *p <= 126) {
+            putchar(*p);
+        }
+        p++;
+    }
+
+    putchar('\n');
+}
+
+void print_help(const char *program)
+{
+    printf("\n");
+    printf("========================================\n");
+    printf("          PROGRAM INFORMATION\n");
+    printf("========================================\n");
+    printf("Usage: %s [options]\n\n", program);
+
+    printf("Available options:\n");
+    printf("  -i         Show UID, EUID, GID, EGID\n");
+    printf("  -s         Set process group\n");
+    printf("  -p         Show PID, PPID, PGRP\n");
+    printf("  -u         Show process limit\n");
+    printf("  -U NUMBER  Set process limit\n");
+    printf("  -c         Show core size limit\n");
+    printf("  -C NUMBER  Set core size limit\n");
+    printf("  -d         Show current directory\n");
+    printf("  -v         Show environment variables\n");
+    printf("  -V NAME=VALUE  Set environment variable\n");
+
+    printf("\nExamples:\n");
+    printf("  %s -i -p\n", program);
+    printf("  %s -u -U 100\n", program);
+    printf("  %s -C 1024\n", program);
+    printf("  %s -V TEST=123\n", program);
+
+    printf("========================================\n\n");
+}
+
+/* Check numeric arguments */
+int check_number(const char *str)
+{
+    unsigned long long value;
+    char *end;
+
+    if (str == NULL || *str == '\0')
+        return 0;
+
+    for (const unsigned char *p =
+         (const unsigned char *)str; *p; p++) {
+        if (*p < '0' || *p > '9')
+            return 0;
+    }
+
+    errno = 0;
+    value = strtoull(str, &end, 10);
+
+    if (errno == ERANGE || *end != '\0' ||
+        value > LONG_MAX)
+        return 0;
+
+    return 1;
+}
+
+/* Check environment variable NAME=VALUE */
+int check_env(const char *str)
+{
+    const unsigned char *p =
+        (const unsigned char *)str;
+
+    if (p == NULL || !(*p == '_' ||
+        (*p >= 'A' && *p <= 'Z') ||
+        (*p >= 'a' && *p <= 'z')))
+        return 0;
+
+    while (*p && *p != '=') {
+        if (!(*p == '_' ||
+              (*p >= 'A' && *p <= 'Z') ||
+              (*p >= 'a' && *p <= 'z') ||
+              (*p >= '0' && *p <= '9')))
+            return 0;
+        p++;
+    }
+
+    if (*p != '=')
+        return 0;
+
+    p++;
+
+    while (*p) {
+        if (!(isalnum(*p) ||
+              *p == '_' || *p == '-' ||
+              *p == '.' || *p == '/' ||
+              *p == ':' || *p == '@'))
+            return 0;
+        p++;
+    }
+
+    return 1;
+}
+
+/* Check all command-line arguments */
+int check_arguments(int argc, char *argv[])
+{
+    int opt;
+
+    opterr = 0;
+
+    while ((opt = getopt(argc, argv,
+            ":ispuU:cC:dvV:")) != -1) {
+
+        if (opt == '?' || opt == ':') {
+            fprintf(stderr,
+                "Error: invalid or missing option\n");
+            return -1;
+        }
+
+        if (opt == 'U' || opt == 'C') {
+            if (!check_number(optarg)) {
+                fprintf(stderr,
+                    "Error: -%c requires a valid "
+                    "non-negative integer\n", opt);
+                return -1;
+            }
+        }
+
+        if (opt == 'V') {
+            if (!check_env(optarg)) {
+                fprintf(stderr,
+                    "Error: invalid environment "
+                    "variable format\n");
+                return -1;
+            }
+        }
+    }
+
+    if (optind < argc) {
+        fprintf(stderr,
+            "Error: unexpected argument\n");
+        return -1;
+    }
+
+    /* Reset getopt for the original main loop */
+    optind = 1;
+    opterr = 1;
+
+    return 0;
+}
+
+
 
 int print_ulimit_u_solaris(void)
 {
@@ -38,6 +196,14 @@ int print_ulimit_u_solaris(void)
 
 int main(int argc, char *argv[])
 {
+    print_help(argv[0]);
+
+    if (check_arguments(argc, argv) != 0) {
+        fprintf(stderr,
+                "Use only permitted options and characters.\n");
+        return 1;
+    }
+
     int opt;
     long max_procs = sysconf(_SC_CHILD_MAX), need = 29995;
     struct Operation operations[argc];
@@ -146,7 +312,7 @@ int main(int argc, char *argv[])
         } else if (operations[i].option == 'v') {
 
             for (char **env = environ; *env != NULL; env++){
-                printf("%s\n", *env);
+                print_safe(*env);
             }
     
         } else if (operations[i].option == 'V') {
