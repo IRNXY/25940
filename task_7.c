@@ -231,13 +231,14 @@ int main(int argc, char *argv[])
         close(file_r);
         return 1;
     }
+    alarm(5);
 
     while (1) {
         char input[100];
         int line_number;
 
         alarm_triggered = 0;
-        alarm(5);
+
 
         printf("\ninput: ");
         fflush(stdout);
