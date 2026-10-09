@@ -6,6 +6,7 @@
 #include <sys/resource.h>
 #include <ulimit.h>
 #include <errno.h>
+#include <rctl.h>
 
 extern char **environ;
 
@@ -97,12 +98,24 @@ int main(int argc, char *argv[])
         } else if (operations[i].option == 'U') {
             // long new_limit = atol(optarg);
             // ulimit(UL_SETFSIZE, new_limit);
-            struct rlimit limit;
-            long value = strtol(operations[i].arg, NULL, 10);
-            getrlimit(RLIMIT_NPROC, &limit);
+            // struct rlimit limit;
+            // long value = strtol(operations[i].arg, NULL, 10);
+            // getrlimit(RLIMIT_NPROC, &limit);
 
-            limit.rlim_cur = value;
-            setrlimit(RLIMIT_NPROC, &limit);
+            // limit.rlim_cur = value;
+            // setrlimit(RLIMIT_NPROC, &limit);
+            limit = atoull(optarg);
+            blk = calloc(1, rctlblk_size());
+
+            rctlblk_set_value(blk, limit);
+            rctlblk_set_privilege(blk, RCPRIV_BASIC);
+            rctlblk_set_local_action(blk, RCTL_LOCAL_DENY);
+
+            setrctl("process.max-processes", NULL, blk, RCTL_INSERT);
+
+            printf("Лимит процессов установлен: %llu\n", (unsigned long long)limit);
+
+            free(blk);
 
         } else if (operations[i].option == 'c') {
 
