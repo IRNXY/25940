@@ -76,23 +76,23 @@ int main(int argc, char *argv[])
 
         } else if (operations[i].option == 'u') { 
 
-            // long max_procs;
+            long max_procs;
 
-            // errno = 0;
-            // max_procs = sysconf(_SC_CHILD_MAX);
+            errno = 0;
+            max_procs = sysconf(_SC_CHILD_MAX);
 
-            // if (max_procs == -1) {
-            //     if (errno != 0) {
-            //         perror("sysconf(_SC_CHILD_MAX)");
-            //         return -1;
-            //     }
-            //     printf("ulimit -u: unlimited\n");
-            // } else {
-            //     printf("ulimit -u: %ld\n", max_procs);
-            // }
-            struct rlimit limit;
-            getrlimit(RLIMIT_NPROC, &limit);
-            printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
+            if (max_procs == -1) {
+                if (errno != 0) {
+                    perror("sysconf(_SC_CHILD_MAX)");
+                    return -1;
+                }
+                printf("ulimit -u: unlimited\n");
+            } else {
+                printf("ulimit -u: %ld\n", max_procs);
+            }
+            // struct rlimit limit;
+            // getrlimit(RLIMIT_CPU, &limit);
+            // printf("ulimit  %llu\n", (unsigned long long)limit.rlim_cur);
 
         } else if (operations[i].option == 'U') {
             // long new_limit = atol(optarg);
