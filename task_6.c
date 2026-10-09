@@ -4,6 +4,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
@@ -16,12 +18,18 @@ struct Line {
 struct Line table[200];
 int file_r, n, line_start = 0, line_count = 0;
 
+char *file_memory;
+int file_size;
+
+volatile sig_atomic_t alarm_triggered = 0;
+
 void print_help(void)
 {
     printf("\n====================================\n");
-    printf("        FILE LINE READER + ALARM\n");
+    printf("       FILE READER WITH MMAP\n");
     printf("====================================\n");
-    printf("This program reads a text file.\n");
+    printf("This program reads a text file\n");
+    printf("using memory mapping (mmap).\n");
     printf("It creates a table of line positions\n");
     printf("and allows you to display any line.\n");
 
@@ -57,28 +65,19 @@ int check_input(const char *str)
 
 void finish(int sig)
 {
-    char *buffer;
+    (void)sig;
+    alarm_triggered = 1;
+}
 
-    /* Keep SIGALRM from interrupting output */
-    alarm(0);
-
+void print_all_lines(void)
+{
     printf("\nclosed\n");
 
     for (int i = 0; i < line_count; i++) {
-        buffer = malloc(table[i].len + 1);
-
-        lseek(file_r, table[i].start, SEEK_SET);
-
-        int n = read(file_r, buffer, table[i].len);
-        buffer[n] = '\0';
-
-        printf("%s", buffer);
-
-        free(buffer);
+        printf("%.*s",
+            table[i].len,
+            file_memory + table[i].start);
     }
-
-    close(file_r);
-    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -92,7 +91,9 @@ int main(int argc, char *argv[])
             printf("Error: filename is too long!\n");
             return 1;
         }
+
         strcpy(filename, argv[1]);
+
     } else if (argc == 1) {
         printf("Enter filename: ");
         fflush(stdout);
@@ -115,13 +116,52 @@ int main(int argc, char *argv[])
     file_r = open(filename, O_RDONLY);
 
     if (file_r == -1) {
-        perror("Error opening file");
+        perror("open");
+        return 1;
+    }
+
+    struct stat st;
+
+    if (fstat(file_r, &st) == -1) {
+        perror("fstat");
+        close(file_r);
+        return 1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        printf("Error: not a regular file!\n");
+        close(file_r);
+        return 1;
+    }
+
+    if (st.st_size == 0) {
+        printf("Error: file is empty!\n");
+        close(file_r);
+        return 1;
+    }
+
+    if (st.st_size > INT_MAX) {
+        printf("Error: file is too large!\n");
+        close(file_r);
+        return 1;
+    }
+
+    file_size = st.st_size;
+
+    file_memory = mmap(NULL, file_size,
+                       PROT_READ, MAP_PRIVATE,
+                       file_r, 0);
+
+    if (file_memory == MAP_FAILED) {
+        perror("mmap");
+        close(file_r);
         return 1;
     }
 
     table[0].start = 0;
 
     char c;
+
     while ((n = read(file_r, &c, 1)) > 0) {
 
         if (c == '\n') {
@@ -130,6 +170,7 @@ int main(int argc, char *argv[])
 
             if (current_position == -1) {
                 perror("lseek");
+                munmap(file_memory, file_size);
                 close(file_r);
                 return 1;
             }
@@ -137,11 +178,12 @@ int main(int argc, char *argv[])
             table[line_count].len =
                 current_position - line_start;
 
-            line_count += 1;
+            line_count++;
             line_start = current_position;
 
             if (line_count >= 200) {
                 printf("Error: too many lines!\n");
+                munmap(file_memory, file_size);
                 close(file_r);
                 return 1;
             }
@@ -152,6 +194,7 @@ int main(int argc, char *argv[])
 
     if (n == -1) {
         perror("read");
+        munmap(file_memory, file_size);
         close(file_r);
         return 1;
     }
@@ -160,12 +203,13 @@ int main(int argc, char *argv[])
 
     if (end == -1) {
         perror("lseek");
+        munmap(file_memory, file_size);
         close(file_r);
         return 1;
     }
 
     table[line_count].len = end - line_start;
-    line_count += 1;
+    line_count++;
 
     printf("\nresult:\n");
     printf("Line\nstart\tlen\n");
@@ -175,25 +219,54 @@ int main(int argc, char *argv[])
             i + 1, table[i].start, table[i].len);
     }
 
-    signal(SIGALRM, finish);
-    alarm(5);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = finish;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGALRM, &sa, NULL) == -1) {
+        perror("sigaction");
+        munmap(file_memory, file_size);
+        close(file_r);
+        return 1;
+    }
+
     while (1) {
         char input[100];
         int line_number;
 
+        alarm_triggered = 0;
+        alarm(5);
 
         printf("\ninput: ");
         fflush(stdout);
 
+        errno = 0;
+
         if (fgets(input, sizeof(input), stdin) == NULL) {
-            if (errno == EINTR) {
+            alarm(0);
+
+            if (alarm_triggered) {
+                clearerr(stdin);
+                print_all_lines();
+                break;
+            }
+
+            if (ferror(stdin) && errno == EINTR) {
                 clearerr(stdin);
                 continue;
             }
+
             break;
         }
 
         alarm(0);
+
+        if (alarm_triggered) {
+            print_all_lines();
+            break;
+        }
 
         int input_len = strlen(input);
 
@@ -247,29 +320,12 @@ int main(int argc, char *argv[])
 
         int len = table[line_number - 1].len;
 
-        char *buffer = malloc(len + 1);
-
-        lseek(file_r,
-              table[line_number - 1].start,
-              SEEK_SET);
-
-        int bytes_read = read(file_r, buffer, len);
-
-        if (bytes_read == -1) {
-            perror("read");
-            free(buffer);
-            close(file_r);
-            return 1;
-        }
-
-        buffer[bytes_read] = '\0';
-
-        printf("%s", buffer);
-
-        free(buffer);
-        alarm(0);
+        printf("%.*s", len,
+            file_memory + table[line_number - 1].start);
     }
 
+    alarm(0);
+    munmap(file_memory, file_size);
     close(file_r);
 
     return 0;
