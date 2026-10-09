@@ -7,6 +7,7 @@
 #include <ulimit.h>
 #include <errno.h>
 #include <rctl.h>
+#include <string.h>
 
 extern char **environ;
 
@@ -104,33 +105,39 @@ int main(int argc, char *argv[])
 
             // limit.rlim_cur = value;
             // setrlimit(RLIMIT_NPROC, &limit);
-            rctlblk_t *blk;
-            uint64_t limit;
-            limit = strtoull(optarg, NULL, 10);
-            blk = calloc(1, rctlblk_size());
-            rctlblk_set_value(blk, limit);
-            rctlblk_set_privilege(blk, RCPRIV_BASIC);
+        
+            unsigned long long value =
+                    strtoull(operations[i].arg, NULL, 10);
 
-            /* Сначала пробуем вставить — если значения ещё нет */
-            if (setrctl("process.max-processes", NULL, blk, RCTL_INSERT) == -1) {
-                /* Значение уже существует — удаляем и вставляем новое */
-                rctlblk_t *old = calloc(1, rctlblk_size());
+                size_t size = rctlblk_size();
+                rctlblk_t *old_blk = malloc(size);
+                rctlblk_t *new_blk = malloc(size);
 
-                if (getrctl("process.max-processes", NULL, old, RCTL_FIRST) == 0) {
-                    setrctl("process.max-processes", NULL, old, RCTL_DELETE);
-                }
-                free(old);
-
-                if (setrctl("process.max-processes", NULL, blk, RCTL_INSERT) == -1) {
-                    perror("setrctl");
-                    free(blk);
+                if (!old_blk || !new_blk) {
+                    perror("malloc");
+                    free(old_blk);
+                    free(new_blk);
                     return 1;
                 }
-            }
 
-            printf("Лимит процессов установлен: %llu\n", (unsigned long long)limit);
-            system("ulimit -u");
+                if (getrctl("project.max-processes",
+                            NULL, old_blk, RCTL_FIRST) == -1) {
+                    perror("getrctl");
+                    free(old_blk);
+                    free(new_blk);
+                    return 1;
+                }
 
+                memcpy(new_blk, old_blk, size);
+                rctlblk_set_value(new_blk, value);
+
+                if (setrctl("project.max-processes",
+                            old_blk, new_blk, RCTL_REPLACE) == -1) {
+                    perror("setrctl");
+                }
+
+                free(old_blk);
+                free(new_blk);
 
         } else if (operations[i].option == 'c') {
 
