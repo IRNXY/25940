@@ -105,39 +105,27 @@ int main(int argc, char *argv[])
 
             // limit.rlim_cur = value;
             // setrlimit(RLIMIT_NPROC, &limit);
-        
             unsigned long long value =
-                    strtoull(operations[i].arg, NULL, 10);
+                strtoull(operations[i].arg, NULL, 10);
 
-                size_t size = rctlblk_size();
-                rctlblk_t *old_blk = malloc(size);
-                rctlblk_t *new_blk = malloc(size);
+            size_t size = rctlblk_size();
+            rctlblk_t *blk = malloc(size);
 
-                if (!old_blk || !new_blk) {
-                    perror("malloc");
-                    free(old_blk);
-                    free(new_blk);
-                    return 1;
-                }
+            if (!blk) {
+                perror("malloc");
+                return 1;
+            }
 
-                if (getrctl("project.max-processes",
-                            NULL, old_blk, RCTL_FIRST) == -1) {
-                    perror("getrctl");
-                    free(old_blk);
-                    free(new_blk);
-                    return 1;
-                }
+            rctlblk_set_privilege(blk, RCPRIV_BASIC);
+            rctlblk_set_value(blk, value);
+            rctlblk_set_local_action(blk, RCTL_LOCAL_DENY, 0);
 
-                memcpy(new_blk, old_blk, size);
-                rctlblk_set_value(new_blk, value);
+            if (setrctl("task.max-processes",
+                        NULL, blk, RCTL_INSERT) == -1) {
+                perror("setrctl");
+            }
 
-                if (setrctl("project.max-processes",
-                            old_blk, new_blk, RCTL_REPLACE) == -1) {
-                    perror("setrctl");
-                }
-
-                free(old_blk);
-                free(new_blk);
+            free(blk);
 
         } else if (operations[i].option == 'c') {
 
