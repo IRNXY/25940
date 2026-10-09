@@ -124,8 +124,15 @@ int main(int argc, char *argv[])
                         NULL, blk, RCTL_INSERT) == -1) {
                 perror("setrctl");
             }
-            system("ulimit -u");
             free(blk);
+
+            char cmd[128];
+
+            snprintf(cmd, sizeof(cmd),
+                    "prctl -n task.max-processes %ld",
+                    (long)getpid());
+
+            system(cmd);
 
         } else if (operations[i].option == 'c') {
 
