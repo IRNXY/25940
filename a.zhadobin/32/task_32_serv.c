@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/file.h>
 
 #define SOCKET_PATH "./socket"
 #define BUFFER_SIZE 1024
