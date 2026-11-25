@@ -1,4 +1,3 @@
-
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -25,16 +24,14 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "A") == 0) {
         message = "AAaaaaAAaAAaaa\n";
-        delay.tv_sec = 0;
-        delay.tv_nsec = 30000000;
     } else if (strcmp(argv[1], "B") == 0) {
         message = "BBBbbbBbbbbbB\n";
-        delay.tv_sec = 0;
-        delay.tv_nsec = 30000000;
     } else {
         fprintf(stderr, "Укажите A или B\n");
         return EXIT_FAILURE;
     }
+
+    srand((unsigned int)time(NULL) ^ (unsigned int)getpid());
 
     signal(SIGPIPE, SIG_IGN);
 
@@ -70,8 +67,11 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
 
-        if (i < 49)
+        if (i < 49) {
+            delay.tv_sec = 0;
+            delay.tv_nsec = (rand() % 50 + 1) * 1000000L;
             nanosleep(&delay, NULL);
+        }
     }
 
     close(sock_fd);
