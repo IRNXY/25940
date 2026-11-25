@@ -1,4 +1,3 @@
-
 #define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
@@ -15,8 +14,11 @@
 int main(int argc, char *argv[]) {
     int sock_fd;
     struct sockaddr_un addr;
-    struct timespec delay;
+    struct timespec start, end, delay;
     const char *message;
+
+    delay.tv_sec = 0;
+    delay.tv_nsec = 300000000;
 
     if (argc != 2) {
         fprintf(stderr, "Использование: %s A или B\n", argv[0]);
@@ -24,13 +26,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(argv[1], "A") == 0) {
-        message = "AAAAAAAAAA\n";
-        delay.tv_sec = 0;
-        delay.tv_nsec = 500000000;
+        message = "AAaaaaAAaAAaaa\n";
     } else if (strcmp(argv[1], "B") == 0) {
-        message = "BBBBBBBBBBBB\n";
-        delay.tv_sec = 0;
-        delay.tv_nsec = 300000000;
+        message = "BBBbbbBbbbbbB\n";
     } else {
         fprintf(stderr, "Укажите A или B\n");
         return EXIT_FAILURE;
@@ -57,20 +55,37 @@ int main(int argc, char *argv[]) {
 
     printf("Клиент %s подключился!\n", argv[1]);
 
-    for (int i = 0; i < 20; i++) {
+    if (clock_gettime(CLOCK_MONOTONIC, &start) < 0) {
+        perror("clock_gettime");
+        close(sock_fd);
+        return EXIT_FAILURE;
+    }
+
+    for (int i = 0; i < 50; i++) {
         if (write(sock_fd, message, strlen(message)) < 0) {
             perror("write");
             close(sock_fd);
             return EXIT_FAILURE;
         }
 
-        printf("Отправлено: %s", message);
-        nanosleep(&delay, NULL);
+        // Задержка между отправками сообщений
+        // if (i < 49) {
+        //     nanosleep(&delay, NULL);
+        // }
     }
 
-    printf("Клиент %s отключается...\n", argv[1]);
-
     close(sock_fd);
+
+    if (clock_gettime(CLOCK_MONOTONIC, &end) < 0) {
+        perror("clock_gettime");
+        return EXIT_FAILURE;
+    }
+
+    double elapsed = (end.tv_sec - start.tv_sec) +
+                     (end.tv_nsec - start.tv_nsec) / 1000000000.0;
+
+    printf("\nКлиент %s завершил работу за %.6f секунд\n",
+           argv[1], elapsed);
 
     return EXIT_SUCCESS;
 }
