@@ -42,7 +42,7 @@ static int make_async(int fd) {
     if (fcntl(fd, F_SETOWN, getpid()) < 0)
         return -1;
 
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK |  O_SYNC) < 0)
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK | O_SYNC) < 0)
         return -1;
 
     return 0;
@@ -133,6 +133,7 @@ int main(void) {
     sigset_t blocked, old_mask, wait_mask;
     unsigned char escape_state[MAX_CLIENTS] = {0};
 
+    // ОДИН общий буфер на всех клиентов
     char shared_buffer[BUFFER_SIZE];
 
     for (int i = 0; i < MAX_CLIENTS; i++)
@@ -195,7 +196,8 @@ int main(void) {
     fprintf(stderr, "Ожидание клиентов на %s...\n", SOCKET_PATH);
 
     while (!stop_server) {
-            while (1) {
+        // accept всех ожидающих клиентов
+        while (1) {
             int client_fd = accept(server_fd, NULL, NULL);
 
             if (client_fd < 0) {
@@ -235,6 +237,8 @@ int main(void) {
 
             fprintf(stderr, "Клиент подключился (fd=%d)\n", client_fd);
         }
+
+        // читаем всех клиентов в ОДИН общий буфер и сразу выводим
         for (int i = 0; i < MAX_CLIENTS; i++) {
             int fd = clients[i];
 
@@ -253,6 +257,8 @@ int main(void) {
                             goto error;
                         }
                     }
+
+                    // пока клиент отдаёт данные — читаем дальше в тот же буфер
                     continue;
                 }
 
