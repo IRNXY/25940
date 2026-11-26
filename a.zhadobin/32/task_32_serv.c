@@ -8,7 +8,6 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/file.h>
 
 #define SOCKET_PATH "./socket"
 #define BUFFER_SIZE 1024
@@ -125,117 +124,6 @@ static ssize_t filter_text(char buffer[], ssize_t n, unsigned char *state) {
     return len;
 }
 
-static int accept_clients(int server_fd, int clients[], unsigned char escape_state[]) {
-    while (1) {
-        int client_fd = accept(server_fd, NULL, NULL);
-
-        if (client_fd < 0) {
-            if (errno == EINTR)
-                continue;
-
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return 0;
-
-            perror("accept");
-            return -1;
-        }
-
-        int slot = -1;
-
-        for (int i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i] == -1) {
-                slot = i;
-                break;
-            }
-        }
-
-        if (slot == -1) {
-            fprintf(stderr, "Слишком много клиентов\n");
-            close(client_fd);
-            continue;
-        }
-
-        if (make_async(client_fd) < 0) {
-            perror("make_async");
-            close(client_fd);
-            continue;
-        }
-
-        clients[slot] = client_fd;
-        escape_state[slot] = 0;
-
-        fprintf(stderr, "Клиент подключился (fd=%d)\n", client_fd);
-    }
-}
-
-static int process_clients(int clients[], unsigned char escape_state[]) {
-    char buffer[BUFFER_SIZE];
-
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        int fd = clients[i];
-
-        if (fd == -1)
-            continue;
-
-        while (1) {
-            ssize_t n = read(fd, buffer, sizeof(buffer));
-
-            if (n > 0) {
-                ssize_t len = filter_text(buffer, n, &escape_state[i]);
-
-                if (len > 0) {
-                    if (write(STDOUT_FILENO, buffer, (size_t)len) < 0) {
-                        perror("write");
-                        return -1;
-                    }
-                }
-
-                continue;
-            }
-
-            if (n == 0) {
-                fprintf(stderr, "Клиент отключился (fd=%d)\n", fd);
-
-                close(fd);
-                clients[i] = -1;
-                escape_state[i] = 0;
-                break;
-            }
-
-            if (errno == EINTR)
-                continue;
-
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
-
-            perror("read");
-            close(fd);
-            clients[i] = -1;
-            escape_state[i] = 0;
-            break;
-        }
-    }
-
-    return 0;
-}
-
-static void cleanup(int server_fd, int clients[], int bound, const sigset_t *old_mask) {
-    fprintf(stderr, "\nЗавершение работы сервера...\n");
-
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (clients[i] != -1)
-            close(clients[i]);
-    }
-
-    if (server_fd >= 0)
-        close(server_fd);
-
-    if (bound)
-        unlink(SOCKET_PATH);
-
-    sigprocmask(SIG_SETMASK, old_mask, NULL);
-}
-
 int main(void) {
     int server_fd = -1;
     int clients[MAX_CLIENTS];
@@ -244,6 +132,8 @@ int main(void) {
     struct sockaddr_un addr;
     sigset_t blocked, old_mask, wait_mask;
     unsigned char escape_state[MAX_CLIENTS] = {0};
+
+    char shared_buffer[BUFFER_SIZE];
 
     for (int i = 0; i < MAX_CLIENTS; i++)
         clients[i] = -1;
@@ -305,20 +195,124 @@ int main(void) {
     fprintf(stderr, "Ожидание клиентов на %s...\n", SOCKET_PATH);
 
     while (!stop_server) {
-        if (accept_clients(server_fd, clients, escape_state) < 0)
-            goto error;
+            while (1) {
+            int client_fd = accept(server_fd, NULL, NULL);
 
-        if (process_clients(clients, escape_state) < 0)
-            goto error;
+            if (client_fd < 0) {
+                if (errno == EINTR)
+                    continue;
+
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    break;
+
+                perror("accept");
+                goto error;
+            }
+
+            int slot = -1;
+
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                if (clients[i] == -1) {
+                    slot = i;
+                    break;
+                }
+            }
+
+            if (slot == -1) {
+                fprintf(stderr, "Слишком много клиентов\n");
+                close(client_fd);
+                continue;
+            }
+
+            if (make_async(client_fd) < 0) {
+                perror("make_async");
+                close(client_fd);
+                continue;
+            }
+
+            clients[slot] = client_fd;
+            escape_state[slot] = 0;
+
+            fprintf(stderr, "Клиент подключился (fd=%d)\n", client_fd);
+        }
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            int fd = clients[i];
+
+            if (fd == -1)
+                continue;
+
+            while (1) {
+                ssize_t n = read(fd, shared_buffer, sizeof(shared_buffer));
+
+                if (n > 0) {
+                    ssize_t len = filter_text(shared_buffer, n, &escape_state[i]);
+
+                    if (len > 0) {
+                        if (write(STDOUT_FILENO, shared_buffer, (size_t)len) < 0) {
+                            perror("write");
+                            goto error;
+                        }
+                    }
+                    continue;
+                }
+
+                if (n == 0) {
+                    fprintf(stderr, "Клиент отключился (fd=%d)\n", fd);
+
+                    close(fd);
+                    clients[i] = -1;
+                    escape_state[i] = 0;
+                    break;
+                }
+
+                if (errno == EINTR)
+                    continue;
+
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    break;
+
+                perror("read");
+                close(fd);
+                clients[i] = -1;
+                escape_state[i] = 0;
+                break;
+            }
+        }
 
         if (!stop_server)
             sigsuspend(&wait_mask);
     }
 
-    cleanup(server_fd, clients, bound, &old_mask);
+    fprintf(stderr, "\nЗавершение работы сервера...\n");
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i] != -1)
+            close(clients[i]);
+    }
+
+    if (server_fd >= 0)
+        close(server_fd);
+
+    if (bound)
+        unlink(SOCKET_PATH);
+
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
     return 0;
 
 error:
-    cleanup(server_fd, clients, bound, &old_mask);
+    fprintf(stderr, "\nЗавершение работы сервера...\n");
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (clients[i] != -1)
+            close(clients[i]);
+    }
+
+    if (server_fd >= 0)
+        close(server_fd);
+
+    if (bound)
+        unlink(SOCKET_PATH);
+
+    sigprocmask(SIG_SETMASK, &old_mask, NULL);
     return 1;
 }
