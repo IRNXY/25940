@@ -1,5 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,8 +29,6 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    srand((unsigned int)time(NULL) ^ (unsigned int)getpid());
-
     signal(SIGPIPE, SIG_IGN);
 
     sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -54,6 +50,12 @@ int main(int argc, char *argv[]) {
 
     printf("Клиент %s подключился!\n", argv[1]);
 
+    if (strcmp(argv[1], "B") == 0) {
+        delay.tv_sec = 0;
+        delay.tv_nsec = 1000000L;
+        nanosleep(&delay, NULL);
+    }
+
     if (clock_gettime(CLOCK_MONOTONIC, &start) < 0) {
         perror("clock_gettime");
         close(sock_fd);
@@ -65,12 +67,6 @@ int main(int argc, char *argv[]) {
             perror("write");
             close(sock_fd);
             return EXIT_FAILURE;
-        }
-
-        if (i < 49) {
-            delay.tv_sec = 0;
-            delay.tv_nsec = (rand() % 50 + 1) * 1000000L;
-            nanosleep(&delay, NULL);
         }
     }
 
