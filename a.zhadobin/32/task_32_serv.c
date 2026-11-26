@@ -42,7 +42,7 @@ static int make_async(int fd) {
     if (fcntl(fd, F_SETOWN, getpid()) < 0)
         return -1;
 
-    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK | FASYNC) < 0)
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK |  O_SYNC) < 0)
         return -1;
 
     return 0;
